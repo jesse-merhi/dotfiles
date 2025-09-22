@@ -1,0 +1,11 @@
+[Unit]
+Description=EWW Workspace Watcher
+After=graphical.target
+
+[Service]
+ExecStart=/home/jmerhi/.config/eww/scripts/workspace-watcher.sh
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+

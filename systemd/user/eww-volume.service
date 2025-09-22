@@ -1,0 +1,12 @@
+[Unit]
+Description=EWW Volume Watcher
+After=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/home/jmerhi/.config/eww/scripts/volume-watcher.sh
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+

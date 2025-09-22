@@ -1,0 +1,11 @@
+[Unit]
+Description=EWW Wifi Watcher
+After=network.target
+
+[Service]
+ExecStart=/home/jmerhi/.config/eww/scripts/wifi-watcher.sh
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+
