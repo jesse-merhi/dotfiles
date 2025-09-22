@@ -1,0 +1,17 @@
+* {
+  all: unset;
+}
+
+.time {
+  padding-right: 10px;
+}
+.metricValue {
+  padding-right: 10px;
+  
+}
+.active {
+  background-color: black;
+}
+.workspaces {
+  padding-left: 10px;
+}

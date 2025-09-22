@@ -1,0 +1,21 @@
+#!/bin/bash
+
+get_volume() {
+  volume=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{print $2}')
+  muted=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo "true" || echo "false")
+
+  # Convert to percent only if volume is not empty
+  percent=$(awk -v vol="$volume" 'BEGIN { if (vol != "") printf "%d\n", vol * 100; else print 0 }')
+
+  eww update volume=$percent
+  eww update is_muted=$muted
+}
+
+# Initial update
+get_volume
+
+# Subscribe to sink events (volume + mute toggle)
+pactl subscribe | grep --line-buffered "sink" | while read -r _; do
+  get_volume
+done
+

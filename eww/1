@@ -1,0 +1,169 @@
+
+;; ---------- THEME ----------
+(defvar accent   "#8aadf4")
+(defvar fg       "#e5e9f0")
+(defvar fg-mute  "#b3b9c5")
+(defvar bg       "#111318")
+(defvar bg-alt   "#171a20")
+(defvar bar-height 34)
+(defvar spacing 10)
+(defvar ws_json "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\",\"9\"]")
+
+;; ---------- STATE ----------
+(defpoll hypr_workspaces :interval "0.5s"
+  "hyprctl workspaces -j | jq -r '[ .[] | .id ]'")
+(defpoll active_ws :interval "0.5s"
+  "hyprctl monitors -j | jq -r '.[0].activeWorkspace.id'")
+
+(defpoll wifi_data :interval "5s"
+  "./scripts/wifi-watcher.sh")
+
+(defvar volume 0)
+(defvar is_muted false)
+
+(defvar wifi_open false)
+(defvar wifi_connecting "")
+(defvar power_open false)
+
+;; ---------- DATA SOURCES ----------
+(deflisten music :initial ""
+  "playerctl --follow metadata --format '{{ artist }} - {{ title }}' 2>/dev/null || true")
+
+(defpoll time :interval "10s"
+  "date '+%a %d %b • %H:%M'")
+
+;; ---------- HELPERS ----------
+(defwidget chip []
+  (box :space-evenly false :class "chip" :orientation "h" :spacing 6 (children)))
+
+(defwidget sep [] (label :class "sep" :text "•"))
+
+;; ---------- LEFT: Workspaces ----------
+(defwidget workspaces []
+  (box :class "workspaces" :orientation "h" :spacing 6 :halign "start"
+    (for n in ws_json
+      (button
+        :class {active_ws == n ? "ws active" : "ws"}
+        :onclick {"hyprctl dispatch workspace " + n}
+        (label :text n)))))
+
+;; ---------- CENTER: Music ----------
+(defwidget music-widget []
+  (box :class "music" :orientation "h"
+    (label :class "music-text" :limit-width 40 :ellipsize "end"
+           :tooltip {music} :text {music != "" ? "🎵 " + music : ""})))
+
+;; ---------- VOLUME ----------
+(defwidget volume-chip []
+  (chip 
+    (button
+      :class "icon-btn"
+      :onclick "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle; eww update is_muted=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo true || echo false)"
+      (label :text {(is_muted == true) ? "🔇" : "🔊"}))
+    (scale :min 0 :max 100 :value {volume}
+      :onchange "wpctl set-volume @DEFAULT_AUDIO_SINK@ {}%"
+      :width 120)))
+
+;; ---------- BATTERY / POWER ----------
+(defwidget battery-chip []
+  (eventbox :onhover "eww get power_open && eww close power_menu && eww update power_open=false || eww open power_menu && eww update power_open=true"
+  (box :class "chip battery"
+    (box (label :text {EWW_BATTERY["BAT0"].status == "Discharging" ? "🔋" : "⚡"})
+    (label :text {EWW_BATTERY["BAT0"].capacity + "%"})))))
+
+
+(defwindow power_menu
+  :monitor 0
+  :geometry (geometry :x "6px" :y "6px" :anchor "top right")
+  :stacking "fg" :focusable false :wm-ignore true
+  (eventbox :class "power-menu"
+    :onhoverlost "eww close power_menu; eww update power_open=false"
+    (box :orientation "v" :spacing 8 :class "power-menu"
+      ;; Battery detail
+      (box :orientation "h" :spacing 6
+        (label :text "🔋 Battery")
+        (label :text {EWW_BATTERY["BAT0"].capacity + "% (" + EWW_BATTERY["BAT0"].status + ")" }))
+      ;; CPU
+      (box :orientation "h" :spacing 6
+        (label :text "🖥 CPU")
+        (label :text {round(EWW_CPU.avg,1) + "%"}))
+      ;; RAM
+      (box :orientation "h" :spacing 6
+        (label :text "🐏 RAM")
+        (label :text {round(EWW_RAM.used_mem/powi(10,9),1) + " / " 
+                     + round(EWW_RAM.total_mem/powi(10,9),1) + " GB"}))
+      ;; Disk
+      (box :orientation "h" :spacing 6
+        (label :text "💾 Disk")
+        (label :text {round(EWW_DISK["/home"].used/powi(10,9),1) + " GB / " 
+                     + round(EWW_DISK["/home"].total/powi(10,12),2) + " TB"}))
+      ;; Actions
+      (box :orientation "h" :spacing 12 
+        (button :onclick "systemctl suspend" (label :text "💤"))
+        (button :onclick "systemctl reboot"  (label :text "🔄"))
+        (button :onclick "systemctl poweroff" (label :text "⏻")))
+    )
+  )
+)
+;; ---------- WIFI ----------
+(defwidget wifi-chip []
+  (eventbox :onhover "eww get wifi_open && eww close wifi_menu && eww update wifi_open=false || eww open wifi_menu && eww update wifi_open=true"
+     (box :space-evenly false :spacing 6 :class "chip wifi" 
+      (image :path { wifi_data.radio == "disabled" ? "./assets/nowifi.svg"
+                   : wifi_data.strength < 25 ? "./assets/wifi-0.svg"
+                   : wifi_data.strength < 50 ? "./assets/wifi-1.svg"
+                   : wifi_data.strength < 75 ? "./assets/wifi-2.svg"
+                   : "./assets/wifi-3.svg"})
+      (label  :text {wifi_data.ssid ?: "Disconnected"})
+      (revealer :reveal {(wifi_connecting != "")} :transition "slideup" :duration "200ms"
+        (label :text {wifi_connecting}))))) 
+
+(defwidget wifi-row [net]
+  (button :class "wifi-row" 
+    :onclick {"./scripts/wifi-connecter.sh --ssid '" + net.ssid + "' &"}
+    (centerbox :orientation "h" :spacing 6 :space-evenly false 
+      (image :halign "start" :path { (net.signal < 15 ? "./assets/wifi-0.svg"
+                    : net.signal < 35 ? "./assets/wifi-1.svg"
+                    : net.signal < 60 ? "./assets/wifi-2.svg"
+                    : "./assets/wifi-3.svg")} )
+      (label :halign "start" :text {net.ssid != "" ? net.ssid : "Hidden"} )
+      (label :halign "end"  :text {net.security ?: "None"}))))
+
+
+;; --- sizing constants ---
+(defvar row_h 28)      ;; one row's pixel height (tweak to match your row CSS)
+(defvar pad_h 2)       ;; a bit of top/bottom padding
+(defvar max_rows 10)   ;; clamp so it never gets huge
+
+(defwindow wifi_menu
+  :monitor 0
+  :geometry (geometry :x "230px" :y "6px" :width "270px" :anchor "top right")
+  :stacking "fg" :focusable false :wm-ignore true
+  (eventbox :class "wifi-menu" :onhoverlost "eww close wifi_menu; eww update wifi_open=false"
+    (box :orientation "v" :spacing 6
+      (scroll :vscroll true
+        :height {
+          (row_h * (wifi_data.known_count + wifi_data.unknown_count + pad_h))
+        }
+        (box :orientation "v" :spacing 4
+          (for net in {wifi_data.known}   (wifi-row :net net))
+          (for net in {wifi_data.unknown} (wifi-row :net net))
+        )
+      )
+    )
+  )
+)
+;; ---------- CLOCK ----------
+(defwidget clock [] (chip (label :text {time})))
+
+;; ---------- BAR COMPOSITION ----------
+(defwidget mainBar []
+  (centerbox :orientation "h"
+    (box :class "seg left"  :orientation "h" :spacing spacing (workspaces))
+    (box :class "seg center" :orientation "h" (music-widget))
+    (box :class "seg right" :space-evenly false  :halign "end" 
+      (volume-chip) (sep)
+
+      (wifi-chip) (sep)
+      (clock)   (sep)   (battery-chip))))
+(defwindow bar :windowtype "dock" :monitor 0 :geometry (geometry :x "0" :y "0" :width "100%" :height "34px" :anchor "top center") :stacking "fg" :exclusive true :wm-ignore false :reserve (struts :side "top" :distance "34px") (box :class "bar" :orientation "h" :hexpand true :valign "center" (mainBar)) )

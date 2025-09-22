@@ -1,0 +1,109 @@
+(defwidget mainBar []
+  (centerbox :orientation "h"
+    (workspaces)
+    (music)
+    (sidestuff)))
+
+(defwidget sidestuff []
+  (box :class "sidestuff" :orientation "h" :space-evenly false :halign "end"
+    (slider :label {(is_muted == true) ? "🔇" : "🔊"}
+            :value {volume}
+            :onchange "amixer sset Master {}%")
+   (metricValue :label "🐏"
+                 :value {round(
+                          EWW_RAM.used_mem/powi(10,9),2)+"/" +
+                          round(EWW_RAM.total_mem/powi(10,9),2)+" GB "})
+    (metricValue :label "💾"
+                 :value {round(EWW_DISK["/home"].used/powi(10,9),2)+ " GB /" + round(EWW_DISK["/home"].total/powi(10,12),2) + " TB"})
+    
+    (metricValue :label {EWW_BATTERY["BAT0"].status == "Discharging" ? "🔋" : "⚡"}
+                 :value {EWW_BATTERY["BAT0"].capacity + "%"})
+    (metricValue :label "🌐"
+                 :value {wifi_status})
+    
+    (box :class "time" time))
+)
+(defvar cwwks "0")
+
+(defvar cwks "hyprctl dispatch workspace ")
+(defwidget workspaces []
+  (box :class "workspaces"
+       :orientation "h"
+       :space-evenly true
+       :halign "start"
+       :spacing 10
+    (button :class {cwwks == "1" ? "active" : "inactive"}  :onclick {cwks + 1} 1)
+    (button :class {cwwks == "2" ? "active" : "inactive"} :onclick {cwks + 2} 2)
+    (button :class {cwwks == "3" ? "active" : "inactive"} :onclick {cwks + 3} 3)
+    (button :class {cwwks == "4" ? "active" : "inactive"} :onclick {cwks + 4} 4)
+    (button :class {cwwks == "5" ? "active" : "inactive"} :onclick {cwks + 4} 5)
+    (button :class {cwwks == "6" ? "active" : "inactive"} :onclick {cwks + 5} 6)
+    (button :class {cwwks == "7" ? "active" : "inactive"} :onclick {cwks + 6} 7)
+    (button :class {cwwks == "8" ? "active" : "inactive"} :onclick {cwks + 7} 8)
+    (button :class {cwwks == "9" ? "active" : "inactive"} :onclick {cwks + 8} 9)
+ ) 
+)
+
+(defwidget music []
+  (box :class "music"
+       :orientation "h"
+       :space-evenly false
+       :halign "center"
+    {music != "" ? "🎵${music}" : ""}))
+
+
+(defwidget slider [label value onchange]
+  (box :orientation "h"
+       :class "metric"
+       :space-evenly false
+    (box :class "label" label)
+    (label :text value)
+    (scale :min 0
+           :max 101
+           :active {onchange != ""} 
+           :value value
+           :width 100
+           :onchange onchange)))
+
+(defwidget metricValue [label value] 
+  (box :orientation "h"
+       :class "metricValue"
+       :space-evenly false
+       :spacing 10
+    (box :orientation "h"
+         :class "label" 
+      label)
+    value))
+
+
+(deflisten music :initial ""
+  "playerctl --follow metadata --format '{{ artist }} - {{ title }}' || true")
+
+(defpoll time :interval "10s"
+  "date '+%H:%M %b %d, %Y'")
+
+(defpoll volume :interval "60s"
+  "wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{printf \"%d\\n\", $2 * 100}'")
+
+(defpoll is_muted :interval "60s"
+  "wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo true || echo false")
+
+
+(defpoll wifi_status :interval "300s"
+  "~/.config/eww/scripts/wifi-watcher.sh")
+
+
+(defwindow bar
+  :windowtype "dock"
+  :monitor 0
+  :geometry (geometry :x "0"
+                      :y "0"
+                      :width "100%"
+                      :height "30px"
+                      :anchor "top center")
+  :stacking "fg"
+  :exclusive true
+  :wm-ignore false
+  :reserve (struts :side "top" :distance "30px")
+  (mainBar))
+

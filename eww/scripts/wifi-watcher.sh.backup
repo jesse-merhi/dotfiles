@@ -1,0 +1,26 @@
+#!/bin/bash
+
+emit_wifi() {
+  SSID=$(nmcli -t -f active,ssid dev wifi | grep '^yes' | cut -d: -f2)
+  if [[ -z "$SSID" ]]; then
+    eww update wifi_status="❌ Not connected"
+  else
+    STRENGTH=$(nmcli -t -f active,signal dev wifi | grep '^yes' | cut -d: -f2)
+    case $STRENGTH in
+      ''|0|1[0-9]) ICON="📶" ;;
+      2[0-9]|3[0-9]) ICON="📶📶" ;;
+      4[0-9]|5[0-9]|6[0-9]) ICON="📶📶📶" ;;
+      *) ICON="📶📶📶📶" ;;
+    esac
+    eww update wifi_status="$ICON $SSID"
+  fi
+}
+
+# Emit initial status
+emit_wifi
+
+# React to changes using nmcli monitor
+nmcli monitor | while read -r _; do
+  emit_wifi
+done
+
